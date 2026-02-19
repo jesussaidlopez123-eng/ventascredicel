@@ -1,0 +1,242 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Credicel POS - Permanente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .product-card { transition: all 0.2s; border: 2px solid #e2e8f0; cursor: pointer; user-select: none; }
+        .product-card:active { transform: scale(0.95); background-color: #eff6ff; border-color: #3b82f6; }
+        .rep-card { border: 2px solid #1e3a8a; background-color: #fefce8; } 
+        .gas-card { border: 2px solid #dc2626; background-color: #fee2e2; }
+        .blue-gradient { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); }
+        .sidebar { transition: transform 0.3s ease-in-out; width: 33%; min-width: 300px; }
+        .sidebar.closed { transform: translateX(-100%); }
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        #loading-overlay { display: none; }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans h-screen flex flex-col overflow-hidden">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-blue-900/50 z-[300] flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white p-5 rounded-2xl font-black text-blue-900 animate-pulse uppercase">Sincronizando...</div>
+    </div>
+
+    <div id="sidebar-corte" class="sidebar closed fixed inset-y-0 left-0 bg-white z-[250] shadow-2xl flex flex-col p-6 border-r-4 border-blue-900">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-black text-blue-900 uppercase italic underline decoration-yellow-400">Resumen de Turno</h2>
+            <button onclick="toggleCorte()" class="text-slate-400 text-3xl font-bold">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto mb-4 border-b custom-scroll">
+            <div id="lista-detalle-corte" class="space-y-2 text-sm font-bold text-slate-600"></div>
+            <div id="lista-gastos-corte" class="mt-4 pt-4 border-t-2 border-dashed border-red-200 space-y-2 text-sm font-bold text-red-600"></div>
+        </div>
+        <div class="space-y-2 mb-6 text-center">
+            <div class="flex justify-between text-[10px] font-black px-2 uppercase text-slate-400">
+                <span>Ventas: <span id="resumen-ventas">$0.00</span></span>
+                <span>Gastos: <span id="resumen-gastos" class="text-red-500">-$0.00</span></span>
+            </div>
+            <div class="bg-blue-900 p-4 rounded-2xl text-white shadow-lg">
+                <p class="text-[10px] font-black opacity-60 uppercase tracking-widest">EFECTIVO REAL EN CAJA</p>
+                <p id="corte-monto" class="text-4xl font-black text-yellow-400">$0.00</p>
+            </div>
+        </div>
+        <button onclick="ejecutarCorte()" class="w-full bg-red-600 text-white font-black py-4 rounded-xl shadow-lg uppercase active:scale-95 transition">Cerrar Caja y Salir</button>
+    </div>
+
+    <div id="login-screen" class="fixed inset-0 bg-white z-[100] flex items-center justify-center p-6 text-center">
+        <div class="max-w-md w-full border p-8 rounded-3xl shadow-2xl bg-white">
+            <div class="mb-6">
+                <div style="font-size: 2.5rem; font-weight: 900; color: #1e3a8a;">CREDI<span style="color: #facc15;">CEL</span></div>
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-[4px]">Acceso Administrativo</p>
+            </div>
+            <div class="text-left space-y-4">
+                <select id="user-select" class="w-full p-4 border-2 rounded-xl font-bold bg-gray-50">
+                    <option value="Said">Said</option>
+                    <option value="Vendedor 1">Vendedor 1</option>
+                </select>
+                <input id="user-pin" type="password" maxlength="4" inputmode="numeric" class="w-full p-4 border-2 rounded-xl text-center text-2xl tracking-[10px] font-bold bg-gray-50" placeholder="****">
+            </div>
+            <button onclick="intentarEntrar()" class="w-full mt-8 blue-gradient text-white font-black py-4 rounded-xl shadow-lg uppercase transition">Entrar</button>
+        </div>
+    </div>
+
+    <div id="main-app" class="hidden flex-col h-screen flex">
+        <header class="blue-gradient text-white p-4 flex justify-between items-center shadow-md shrink-0">
+            <div class="flex items-center gap-4">
+                <button onclick="toggleCorte()" class="bg-yellow-400 text-blue-900 px-4 py-2 rounded-lg font-black text-xs uppercase shadow-md active:scale-90 transition">Ver Corte</button>
+                <span id="label-vendedor" class="font-bold uppercase text-sm border-l pl-4"></span>
+            </div>
+            <div class="text-right"><div class="font-black text-xl tracking-tighter">CREDI<span class="text-yellow-400">CEL</span></div></div>
+        </header>
+        <div class="flex flex-1 overflow-hidden">
+            <main class="flex-1 p-4 overflow-y-auto bg-white custom-scroll">
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3" id="grid-productos"></div>
+            </main>
+            <aside class="w-72 md:w-80 lg:w-96 bg-slate-100 border-l flex flex-col shadow-xl">
+                <div class="p-4 bg-white border-b font-black text-blue-900 uppercase text-[10px] shrink-0">Venta Nueva</div>
+                <div id="lista-carrito" class="flex-1 overflow-y-auto p-3 space-y-2 font-bold uppercase italic text-xs custom-scroll"></div>
+                <div class="p-4 bg-white border-t-2 space-y-3 shrink-0">
+                    <div class="flex justify-between items-end"><span class="font-bold text-slate-400 text-[10px]">TOTAL VENTA</span><span class="text-3xl font-black text-blue-900">$<span id="total-venta">0.00</span></span></div>
+                    <button onclick="irACobrar()" class="w-full bg-green-600 text-white font-black py-4 rounded-xl shadow-lg text-xl uppercase active:bg-green-700">Cobrar</button>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <div id="modal-cobro" class="fixed inset-0 bg-slate-900/90 hidden items-center justify-center p-4 z-[200] backdrop-blur-sm">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center">
+            <h2 class="text-xl font-black mb-6 text-blue-900 uppercase italic underline decoration-yellow-400">Finalizar Cobro</h2>
+            <div class="grid grid-cols-3 gap-2 mb-4">
+                <button onclick="quickPay(100)" class="bg-slate-100 py-3 rounded-xl font-black text-slate-500">$100</button>
+                <button onclick="quickPay(200)" class="bg-slate-100 py-3 rounded-xl font-black text-slate-500">$200</button>
+                <button onclick="quickPay(500)" class="bg-slate-100 py-3 rounded-xl font-black text-slate-500">$500</button>
+            </div>
+            <input type="number" id="monto-pagado" oninput="actualizarCambio()" class="w-full p-4 border-2 rounded-2xl text-center text-3xl font-black text-blue-900 mb-4" placeholder="0.00">
+            <div class="p-5 bg-yellow-400 rounded-2xl mb-6 shadow-inner"><p class="text-[9px] font-black uppercase text-blue-900 opacity-60">Cambio:</p><p class="text-4xl font-black text-blue-900">$ <span id="cambio-texto">0.00</span></p></div>
+            <button id="btn-finalizar" onclick="finalizarVenta()" class="w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase shadow-lg text-sm">Registrar Venta</button>
+            <button onclick="cerrarCobro()" class="text-slate-400 font-bold uppercase text-[9px] mt-4">Regresar</button>
+        </div>
+    </div>
+
+    <script>
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwb1kO-Ong_XQiC3YazF4p_Ji9S0OBX-ke7UT8m3QMDMGucQEwUf4RsR0VrKnibTWMmSw/exec";
+        const PRODUCTOS = [
+            {id:'CA01', n:'MICA', p:40}, {id:'CA02', n:'MICA 9D', p:90}, {id:'CA03', n:'MICA PRIV', p:150},
+            {id:'CA04', n:'CABLE V8', p:75}, {id:'CA05', n:'CABLE C', p:75}, {id:'CA06', n:'CABLE IP', p:75},
+            {id:'CA07', n:'CARGADOR V8', p:125}, {id:'CA08', n:'CARGADOR C', p:125}, {id:'CA09', n:'CARGADOR IP', p:125},
+            {id:'CA10', n:'CUBO USB', p:120}, {id:'CA11', n:'CUBO C', p:75}, {id:'CA12', n:'POWER BANK', p:220},
+            {id:'CA13', n:'BOCINA', p:180}, {id:'CA14', n:'FUNDA A', p:180}, {id:'CA15', n:'FUNDA B', p:150},
+            {id:'CA16', n:'FUNDA C', p:120}, {id:'CA17', n:'FUNDA D', p:100}, {id:'CA18', n:'FUNDA UNI', p:150},
+            {id:'CA19', n:'AUD', p:75}, {id:'CA20', n:'AUD BT', p:350}, {id:'CA21', n:'TABLET', p:0},
+            {id:'CA22', n:'MEMORIA USB', p:180}, {id:'CA23', n:'MEMORIA SD', p:180}, {id:'CA24', n:'CABLE C-C', p:75},
+            {id:'CA25', n:'CABLE IP-C', p:75}, {id:'CA26', n:'FUNDA A+', p:220}, {id:'CA27', n:'CARG. IP 15', p:250},
+            {id:'CA28', n:'C. AUTO V8', p:145}, {id:'CA29', n:'C. RAPIDA', p:225}, {id:'CA30', n:'CABLE 3-1', p:95},
+            {id:'REP', n:'REPARACION', p:0}, {id:'GAS', n:'GASTO', p:0}
+        ];
+
+        let carrito = []; 
+        let vendedorActivo = "";
+        
+        // CARGA DE DATOS PERSISTENTES
+        let ventasAcumuladasDia = JSON.parse(localStorage.getItem('ventasCredicel')) || {};
+        let gastosDelDia = JSON.parse(localStorage.getItem('gastosCredicel')) || [];
+
+        function saveMemory() {
+            localStorage.setItem('ventasCredicel', JSON.stringify(ventasAcumuladasDia));
+            localStorage.setItem('gastosCredicel', JSON.stringify(gastosDelDia));
+        }
+
+        function toggleCorte() {
+            document.getElementById('sidebar-corte').classList.toggle('closed');
+            pintarDetalleCorte();
+        }
+
+        function pintarDetalleCorte() {
+            const listaV = document.getElementById('lista-detalle-corte');
+            const listaG = document.getElementById('lista-gastos-corte');
+            let totalV = 0, totalG = 0, htmlV = "";
+            for (let id in ventasAcumuladasDia) {
+                let v = ventasAcumuladasDia[id]; totalV += v.total;
+                htmlV += `<div class="flex justify-between border-b py-2 italic font-black"><span>${v.cant}x <span class="text-blue-600">${id}</span></span><span>$${v.total.toFixed(2)}</span></div>`;
+            }
+            listaV.innerHTML = htmlV || "<p class='text-center py-4 opacity-30'>Sin ventas</p>";
+            let htmlG = "<p class='text-[10px] uppercase underline mb-1 text-red-400 font-black'>Egresos:</p>";
+            gastosDelDia.forEach(g => { totalG += g.monto; htmlG += `<div class="flex justify-between italic"><span>- ${g.concepto}</span><span>$${g.monto.toFixed(2)}</span></div>`; });
+            listaG.innerHTML = gastosDelDia.length > 0 ? htmlG : "";
+            document.getElementById('resumen-ventas').innerText = "$" + totalV.toFixed(2);
+            document.getElementById('resumen-gastos').innerText = "-$" + totalG.toFixed(2);
+            document.getElementById('corte-monto').innerText = "$" + (totalV - totalG).toFixed(2);
+        }
+
+        function intentarEntrar() {
+            if(document.getElementById('user-pin').value.length >= 4) {
+                vendedorActivo = document.getElementById('user-select').value;
+                document.getElementById('label-vendedor').innerText = vendedorActivo;
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-app').style.display = 'flex';
+                pintarProductos();
+            } else { alert("PIN Inválido"); }
+        }
+
+        function pintarProductos() {
+            const grid = document.getElementById('grid-productos');
+            grid.innerHTML = PRODUCTOS.map(p => `
+                <div onclick="clickProducto('${p.id}', '${p.n}', ${p.p})" class="product-card bg-white p-3 rounded-2xl text-center shadow-sm flex flex-col justify-between h-28 ${p.id==='REP' ? 'rep-card' : ''} ${p.id==='GAS' ? 'gas-card' : ''}">
+                    <p class="text-blue-600 font-black text-lg ${p.id==='GAS' ? 'text-red-600' : ''}">${p.id}</p>
+                    <p class="text-[8px] font-bold text-slate-400 uppercase flex-1 flex items-center justify-center">${p.n}</p>
+                    <p class="text-blue-900 font-black text-sm">${(p.id==='REP' || p.id==='GAS') ? 'VAR' : '$'+p.p}</p>
+                </div>
+            `).join('');
+        }
+
+        function clickProducto(id, n, p) {
+            if(id === 'GAS') {
+                const con = prompt("¿Concepto?"); if(!con) return;
+                const mon = prompt("¿Monto?"); const monNum = parseFloat(mon);
+                if(!isNaN(monNum) && monNum > 0) registrarGastoServidor(con, monNum);
+            } else if(id === 'REP') {
+                const m = prompt("Monto REPARACIÓN:"); const mNum = parseFloat(m);
+                if(!isNaN(mNum) && mNum > 0) agregar(id, n, mNum);
+            } else { agregar(id, n, p); }
+        }
+
+        async function registrarGastoServidor(concepto, monto) {
+            document.getElementById('loading-overlay').style.display = 'flex';
+            new Image().src = WEB_APP_URL + "?tipo=GASTO&user=" + encodeURIComponent(vendedorActivo) + "&concepto=" + encodeURIComponent(concepto) + "&monto=" + monto;
+            setTimeout(() => {
+                gastosDelDia.push({concepto, monto}); saveMemory();
+                alert("✅ GASTO REGISTRADO");
+                document.getElementById('loading-overlay').style.display = 'none';
+            }, 1200);
+        }
+
+        function agregar(id, n, p) { carrito.push({id, n, p}); actualizarCarrito(); }
+        function actualizarCarrito() {
+            document.getElementById('lista-carrito').innerHTML = carrito.map((item, i) => `
+                <div class="flex justify-between items-center bg-white p-2 rounded-lg border-l-4 border-blue-600 shadow-sm shrink-0">
+                    <span class="truncate w-24">${item.n} ${item.id==='REP'?'$'+item.p:''}</span>
+                    <div class="flex items-center gap-2"><span>$${item.p}</span><button onclick="eliminar(${i})" class="text-red-500 font-black">×</button></div>
+                </div>`).join('');
+            document.getElementById('total-venta').innerText = carrito.reduce((s, i) => s + i.p, 0).toFixed(2);
+        }
+
+        function eliminar(i) { carrito.splice(i, 1); actualizarCarrito(); }
+        function irACobrar() { if(carrito.length > 0) { document.getElementById('modal-cobro').style.display = 'flex'; } }
+        function cerrarCobro() { document.getElementById('modal-cobro').style.display = 'none'; }
+        function quickPay(val) { document.getElementById('monto-pagado').value = val; actualizarCambio(); }
+        function actualizarCambio() {
+            const t = parseFloat(document.getElementById('total-venta').innerText);
+            const p = parseFloat(document.getElementById('monto-pagado').value) || 0;
+            document.getElementById('cambio-texto').innerText = (p - t > 0) ? (p - t).toFixed(2) : "0.00";
+        }
+
+        async function finalizarVenta() {
+            const btn = document.getElementById('btn-finalizar'); btn.disabled = true;
+            document.getElementById('loading-overlay').style.display = 'flex';
+            carrito.forEach(item => {
+                if(!ventasAcumuladasDia[item.id]) { ventasAcumuladasDia[item.id] = { cant: 0, total: 0 }; }
+                ventasAcumuladasDia[item.id].cant += 1; ventasAcumuladasDia[item.id].total += item.p;
+            });
+            saveMemory();
+            const itemsSimplificados = carrito.map(i => ({ codigo: i.id, cantidad: 1, precio: i.p }));
+            new Image().src = WEB_APP_URL + "?user=" + encodeURIComponent(vendedorActivo) + "&items=" + encodeURIComponent(JSON.stringify(itemsSimplificados));
+            setTimeout(() => {
+                alert("✅ REGISTRADO"); carrito = []; actualizarCarrito(); cerrarCobro();
+                document.getElementById('loading-overlay').style.display = 'none'; btn.disabled = false;
+            }, 1200);
+        }
+
+        function ejecutarCorte() {
+            const real = document.getElementById('corte-monto').innerText;
+            if(confirm(`¿CERRAR TURNO?\nEfectivo Real: ${real}`)) {
+                localStorage.removeItem('ventasCredicel');
+                localStorage.removeItem('gastosCredicel');
+                window.location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
