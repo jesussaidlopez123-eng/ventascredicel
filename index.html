@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -188,7 +188,7 @@
             new Image().src = WEB_APP_URL + "?tipo=GASTO&user=" + encodeURIComponent(vendedorActivo) + "&concepto=" + encodeURIComponent(concepto) + "&monto=" + monto;
             setTimeout(() => {
                 gastosDelDia.push({concepto, monto}); saveMemory();
-                alert("✅ GASTO REGISTRADO");
+                alert("? GASTO REGISTRADO");
                 document.getElementById('loading-overlay').style.display = 'none';
             }, 1200);
         }
@@ -224,7 +224,7 @@
             const itemsSimplificados = carrito.map(i => ({ codigo: i.id, cantidad: 1, precio: i.p }));
             new Image().src = WEB_APP_URL + "?user=" + encodeURIComponent(vendedorActivo) + "&items=" + encodeURIComponent(JSON.stringify(itemsSimplificados));
             setTimeout(() => {
-                alert("✅ REGISTRADO"); carrito = []; actualizarCarrito(); cerrarCobro();
+                alert("? REGISTRADO"); carrito = []; actualizarCarrito(); cerrarCobro();
                 document.getElementById('loading-overlay').style.display = 'none'; btn.disabled = false;
             }, 1200);
         }
